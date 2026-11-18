@@ -10,7 +10,9 @@ export type ColorGroup =
   | 'station' 
   | 'utility';
 
-export type BoardTheme = 'classic' | 'luxury' | 'neon' | 'forest';
+export type WorldThemeId = 'india' | 'valorant' | 'original' | 'cyberpunk' | 'wompwomp';
+export type LegacyBoardTheme = 'classic' | 'luxury' | 'neon' | 'forest';
+export type BoardTheme = WorldThemeId | LegacyBoardTheme;
 
 export type TileType = 
   | 'property' 

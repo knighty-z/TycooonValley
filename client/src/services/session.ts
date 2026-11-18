@@ -1,8 +1,52 @@
-import { GuestSession } from '@tycoonvale/shared';
+import { GuestSession, WorldThemeId } from '@tycoonvale/shared';
 import { PLAYER_COLORS, PLAYER_TOKENS } from '@tycoonvale/shared';
 import { AVATAR_DEFINITIONS } from '../components/Artwork/AvatarIcons.js';
 
 const STORAGE_KEY = 'tycoonvale_guest_session';
+const WORLD_STORAGE_KEY = 'tycoonvale_preferred_world';
+const VALID_WORLDS: WorldThemeId[] = ['original', 'valorant', 'india', 'cyberpunk', 'wompwomp'];
+
+export function getPreferredWorld(): WorldThemeId {
+  try {
+    const raw = localStorage.getItem(WORLD_STORAGE_KEY) as WorldThemeId | null;
+    if (raw && VALID_WORLDS.includes(raw)) {
+      return raw;
+    }
+  } catch {
+    // Ignore storage read failures in restricted contexts
+  }
+  return 'original';
+}
+
+export function savePreferredWorld(world: WorldThemeId): void {
+  try {
+    localStorage.setItem(WORLD_STORAGE_KEY, world);
+  } catch {
+    // Ignore storage write failures in restricted contexts
+  }
+}
+
+export function validateNickname(raw: string): { valid: boolean; trimmed: string; error?: string } {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return { valid: false, trimmed, error: 'Enter a player name (2–16 characters).' };
+  }
+  if (trimmed.length < 2) {
+    return { valid: false, trimmed, error: 'Name must be at least 2 characters.' };
+  }
+  if (trimmed.length > 16) {
+    return { valid: false, trimmed, error: 'Name cannot exceed 16 characters.' };
+  }
+  return { valid: true, trimmed };
+}
+
+export function extractRoomCode(raw: string): string {
+  const trimmed = raw.trim();
+  // Support pasting full invite URLs like https://host/?room=ABC123
+  const urlMatch = trimmed.match(/[?&]room=([A-Za-z0-9]+)/i);
+  const candidate = urlMatch ? urlMatch[1] : trimmed;
+  return candidate.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 6);
+}
 
 export const AVATAR_OPTIONS = AVATAR_DEFINITIONS.map(a => ({
   id: a.id,

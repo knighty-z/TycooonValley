@@ -1,114 +1,178 @@
-import React from 'react';
-import { X, BookOpen, Building, Gavel, ArrowLeftRight, Lock, Trophy, Sparkles, Users } from 'lucide-react';
+import React, { useRef } from 'react';
+import { getThemeConfig, getThemeCssVars, type ThemeConfig } from '../../themes/index.js';
+import { useFocusTrap } from '../../hooks/useFocusTrap.js';
+import {
+  X,
+  BookOpen,
+  Building2,
+  Gavel,
+  ArrowLeftRight,
+  Lock,
+  Trophy,
+  Dices
+} from 'lucide-react';
 
 interface HowToPlayModalProps {
   isOpen: boolean;
   onClose: () => void;
+  themeConfig?: ThemeConfig;
 }
 
-export const HowToPlayModal: React.FC<HowToPlayModalProps> = ({ isOpen, onClose }) => {
+const RULE_SECTIONS = [
+  {
+    icon: Trophy,
+    title: '1. Objective & Victory',
+    body: 'TycoonVale is a real-time multiplayer property board game for 2–6 players. Acquire complete color sets, develop properties to raise rent, and bankrupt your opponents. In Team Mode, Gold and Silver cartels share victory.'
+  },
+  {
+    icon: Dices,
+    title: '2. Movement & Doubles',
+    body: 'Roll two six-sided dice on your turn to move clockwise around the 40-tile board. Passing or landing on the Start corner awards the configured Pass Start bonus. Rolling doubles grants an extra turn — three consecutive doubles sends you directly to detention.'
+  },
+  {
+    icon: Building2,
+    title: '3. Monopolies, Building & Mortgages',
+    body: 'Owning every property in a color group doubles base rent and unlocks construction (up to 4 houses, then a hotel), built evenly across the set. Need liquidity? Sell houses or mortgage unimproved properties from your My Properties panel.'
+  },
+  {
+    icon: Gavel,
+    title: '4. Live Public Auctions',
+    body: 'When Auctions are enabled and a player declines an unowned property they land on, an immediate timed auction opens for every active player. Last-second bids trigger a brief extension so every bidder gets a fair shot.'
+  },
+  {
+    icon: ArrowLeftRight,
+    title: '5. Player-to-Player Trading',
+    body: 'Negotiate bilateral deals at any time during the match. Combine unmortgaged title deeds and cash on either side, or send counter-offers directly from the Trade panel.'
+  },
+  {
+    icon: Lock,
+    title: '6. Detention & Free Parking Pot',
+    body: 'Leave detention by rolling doubles, paying the bail fee, or using a Pardon Pass. When Free Parking Pot is active, all taxes and penalties accumulate in the center pot and pay out to the next player who lands on the Free Parking corner.'
+  }
+];
+
+export const HowToPlayModal: React.FC<HowToPlayModalProps> = ({
+  isOpen,
+  onClose,
+  themeConfig
+}) => {
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  useFocusTrap(dialogRef, isOpen, onClose);
+
   if (!isOpen) return null;
 
+  const theme = themeConfig ?? getThemeConfig('original');
+  const cssVars = getThemeCssVars(theme);
+  const isChamfered = theme.chamfered;
+  const headingTransform = theme.fonts.headingUppercase ? 'uppercase' : 'none';
+
   return (
-    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
-      <div className="bg-[#122419] border-4 border-[#B58A30] rounded-3xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden shadow-2xl relative select-none text-[#EDE6D6]">
+    <div
+      data-theme={theme.id}
+      style={cssVars}
+      className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={e => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="how-to-play-title"
+        data-testid="how-to-play-modal"
+        data-chamfered={isChamfered ? 'true' : 'false'}
+        style={{ fontFamily: 'var(--font-body)', color: 'var(--board-ink)' }}
+        className="tv-pregame-surface max-w-2xl w-full max-h-[84vh] flex flex-col overflow-hidden"
+      >
         {/* Header */}
-        <div className="bg-[#0A160F] p-5 border-b-2 border-[#3B281A] flex items-center justify-between">
-          <div className="flex items-center space-x-2.5">
-            <BookOpen className="w-5 h-5 text-[#D4AF37]" />
-            <h2 className="text-xl font-display font-black tracking-wide text-white">
-              TycoonVale Official Rulebook
-            </h2>
+        <div
+          style={{
+            backgroundColor: 'color-mix(in srgb, var(--bg) 90%, #000000)',
+            borderColor: 'color-mix(in srgb, var(--tile-border) 55%, transparent)'
+          }}
+          className="px-5 py-4 border-b flex items-center justify-between gap-3 shrink-0"
+        >
+          <div className="flex items-center gap-2.5">
+            <BookOpen className="w-5 h-5" style={{ color: 'var(--accent)' }} />
+            <div>
+              <h2
+                id="how-to-play-title"
+                style={{
+                  fontFamily: 'var(--font-heading)',
+                  textTransform: headingTransform
+                }}
+                className="text-base sm:text-lg font-extrabold tracking-wider leading-tight"
+              >
+                How to Play TycoonVale
+              </h2>
+              <p className="text-[11px] opacity-65">
+                Core rules across Original, VALORANT Tactical, India & Cyberpunk worlds
+              </p>
+            </div>
           </div>
+
           <button
+            type="button"
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-[#183626] hover:bg-[#254C37] text-white flex items-center justify-center transition"
+            aria-label="Close rulebook"
+            data-testid="close-rules-btn"
+            className="tv-hud-btn tv-hud-btn-secondary p-1.5"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Content Body */}
-        <div className="p-6 overflow-y-auto space-y-6 text-sm text-[#C8BCAB] font-serif leading-relaxed">
-          <section className="space-y-1.5">
-            <h3 className="font-display font-bold text-white flex items-center space-x-2 text-base">
-              <Trophy className="w-4 h-4 text-[#D4AF37]" />
-              <span>1. The Grand Objective</span>
-            </h3>
-            <p className="text-xs sm:text-sm">
-              TycoonVale is an economic board game for 4–6 tycoons. Your goal is to secure color monopolies, 
-              construct townhouses and luxury hotels, extract crippling rent tariffs, and bankrupt your rivals. 
-              In <strong>Team Mode</strong>, cartels pool equity to eliminate the rival syndicate.
-            </p>
-          </section>
-
-          <section className="space-y-1.5">
-            <h3 className="font-display font-bold text-white flex items-center space-x-2 text-base">
-              <Building className="w-4 h-4 text-emerald-400" />
-              <span>2. The 40-Tile Board & Movement</span>
-            </h3>
-            <p className="text-xs sm:text-sm">
-              Players roll two six-sided dice. Rolling doubles grants an immediate extra roll; rolling three 
-              consecutive doubles results in instant detention. Passing or landing on the <strong>GO</strong> corner awards $200.
-            </p>
-          </section>
-
-          <section className="space-y-1.5">
-            <h3 className="font-display font-bold text-white flex items-center space-x-2 text-base">
-              <Sparkles className="w-4 h-4 text-amber-400" />
-              <span>3. Monopolies & Developments</span>
-            </h3>
-            <p className="text-xs sm:text-sm">
-              When a tycoon acquires all title deeds within a color district, unimproved base rent is doubled. 
-              You may then construct up to 4 townhouses before erecting a crowning <strong>Luxury Hotel</strong>. 
-              Houses must be developed evenly across the set.
-            </p>
-          </section>
-
-          <section className="space-y-1.5">
-            <h3 className="font-display font-bold text-white flex items-center space-x-2 text-base">
-              <Gavel className="w-4 h-4 text-[#D4AF37]" />
-              <span>4. Public Auctions</span>
-            </h3>
-            <p className="text-xs sm:text-sm">
-              Whenever a tycoon lands on an unowned title deed and declines to purchase it from the municipal bank, 
-              the space immediately enters a timed public auction. Any active player may bid; bids placed in the 
-              final seconds automatically trigger an anti-sniping time extension.
-            </p>
-          </section>
-
-          <section className="space-y-1.5">
-            <h3 className="font-display font-bold text-white flex items-center space-x-2 text-base">
-              <ArrowLeftRight className="w-4 h-4 text-cyan-400" />
-              <span>5. Bilateral Trading Treaties</span>
-            </h3>
-            <p className="text-xs sm:text-sm">
-              Negotiate directly with rivals. Offer unmortgaged properties and treasury funds in exchange for 
-              the exact pieces you need to finish your monopoly sets.
-            </p>
-          </section>
-
-          <section className="space-y-1.5">
-            <h3 className="font-display font-bold text-white flex items-center space-x-2 text-base">
-              <Lock className="w-4 h-4 text-orange-400" />
-              <span>6. Detention Center & Free Parking Jackpot</span>
-            </h3>
-            <p className="text-xs sm:text-sm">
-              Detention is served upon landing on Tile 30, drawing a sanction card, or rolling 3 doubles. 
-              To exit, roll doubles, pay $50 bail, or use an Executive Pardon Pass. 
-              When the <strong>Free Parking Jackpot</strong> rule is active, all paid taxes and fines accumulate 
-              in the central pot and are awarded to the first tycoon to rest on Grand Plaza Park!
-            </p>
-          </section>
+        {/* Rule Cards Grid */}
+        <div className="p-5 overflow-y-auto tv-hud-scroll grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {RULE_SECTIONS.map(sec => {
+            const IconComp = sec.icon;
+            return (
+              <section
+                key={sec.title}
+                style={{
+                  backgroundColor: 'color-mix(in srgb, var(--bg) 82%, var(--board))',
+                  borderColor: 'color-mix(in srgb, var(--tile-border) 42%, transparent)',
+                  borderRadius: 'var(--radius-tile)'
+                }}
+                className="p-3.5 border space-y-1.5"
+              >
+                <div className="flex items-center gap-2">
+                  <IconComp className="w-4 h-4 shrink-0" style={{ color: 'var(--accent)' }} />
+                  <h3
+                    style={{
+                      fontFamily: 'var(--font-heading)',
+                      textTransform: headingTransform
+                    }}
+                    className="text-xs font-bold tracking-wider"
+                  >
+                    {sec.title}
+                  </h3>
+                </div>
+                <p className="text-xs leading-relaxed opacity-80">{sec.body}</p>
+              </section>
+            );
+          })}
         </div>
 
         {/* Footer */}
-        <div className="bg-[#0A160F] p-4 border-t-2 border-[#3B281A] text-center">
+        <div
+          style={{
+            backgroundColor: 'color-mix(in srgb, var(--bg) 90%, #000000)',
+            borderColor: 'color-mix(in srgb, var(--tile-border) 45%, transparent)'
+          }}
+          className="px-5 py-3 border-t flex items-center justify-between gap-3 shrink-0"
+        >
+          <span className="text-[11px] opacity-65">
+            Press <kbd className="px-1.5 py-0.5 border border-white/20 text-[10px]">Esc</kbd> to return
+          </span>
           <button
+            type="button"
             onClick={onClose}
-            className="py-2.5 px-8 rounded-xl bg-gradient-to-r from-[#D4AF37] to-[#B8860B] text-[#12241A] font-display font-black text-xs uppercase tracking-widest shadow-md hover:brightness-110 transition"
+            data-chamfered={isChamfered ? 'true' : 'false'}
+            className="tv-hud-btn tv-hud-btn-primary px-6 py-2 text-xs uppercase tracking-wider"
           >
-            I Understand the Rules
+            Got It
           </button>
         </div>
       </div>

@@ -1,4 +1,4 @@
-import { BoardTile } from '../types/index.js';
+import { BoardTile, BoardTheme } from '../types/index.js';
 
 export const COLOR_GROUP_CONFIG = {
   brown: {
@@ -473,14 +473,14 @@ export const BOARD_TILES: BoardTile[] = [
 ];
 
 export const PLAYER_COLORS = [
-  '#C99700', // Antique Imperial Gold
-  '#A82810', // Crimson Burgundy
-  '#1B4D3E', // Forest Emerald
-  '#183B56', // Regal Navy
-  '#6D28D9', // Deep Imperial Violet
-  '#D97706', // Warm Amber
-  '#0D9488', // Mediterranean Teal
-  '#475569'  // Slate Graphite
+  '#00B4D8', // Electric Cerulean
+  '#FF5E7E', // Coral Rose
+  '#A855F7', // Royal Amethyst
+  '#22C55E', // Emerald Mint
+  '#F97316', // Vivid Tangerine
+  '#EAB308', // Solar Gold
+  '#EC4899', // Fuchsia Pulse
+  '#14B8A6'  // Deep Lagoon
 ];
 
 export const PLAYER_TOKENS = [
@@ -509,5 +509,5 @@ export const DEFAULT_GAME_SETTINGS = {
   jailBailCost: 50,
   freeParkingJackpot: true,
   teamMode: false,
-  theme: 'classic' as const
+  theme: 'original' as BoardTheme
 };

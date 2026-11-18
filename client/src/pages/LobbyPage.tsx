@@ -1,433 +1,593 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import type { GameSettings, GameState, Player, WorldThemeId } from '@tycoonvale/shared';
 import { useGame } from '../context/GameContext.js';
-import { getAvatarById } from '../components/Artwork/AvatarIcons.js';
-import { getTokenById } from '../components/Artwork/TokenIcons.js';
-import { THEME_CONFIGS } from '../styles/themes.js';
-import { BoardTheme } from '@tycoonvale/shared';
-import { 
-  Crown, 
-  CheckCircle2, 
-  Clock, 
-  Copy, 
-  Check, 
-  Play, 
-  Sliders, 
-  Sparkles,
-  Users,
-  Shield,
-  Coins,
-  Timer,
-  Gavel,
-  ArrowLeftRight
+import type { RealtimeConnectionStatus } from '../services/supabase/realtime.js';
+import {
+  getThemeConfig,
+  getThemeCssVars,
+  normalizeWorldTheme,
+  resolveUniquePlayerColors,
+  resolveWorldTokensForPlayers
+} from '../themes/index.js';
+import { soundEngine } from '../services/audio.js';
+import { WorldSelector } from '../components/Pregame/WorldSelector.js';
+import { CharacterSelectPanel } from '../components/Pregame/CharacterSelectPanel.js';
+import { LobbyPlayerSlots } from '../components/Pregame/LobbyPlayerSlots.js';
+import { HostSettingsPanel } from '../components/Pregame/HostSettingsPanel.js';
+import { LaunchTransitionOverlay } from '../components/Pregame/LaunchTransitionOverlay.js';
+import { ConnectionStatusBanner } from '../components/Pregame/ConnectionStatusBanner.js';
+import { ChatBox } from '../components/HUD/ChatBox.js';
+import {
+  Copy,
+  Check,
+  Link2,
+  Play,
+  CheckCircle2,
+  LogOut,
+  Crown,
+  BookOpen,
+  Volume2,
+  VolumeX,
+  AlertCircle,
+  X
 } from 'lucide-react';
 
-export const LobbyPage: React.FC = () => {
-  const { 
-    gameState, 
-    player, 
-    toggleReady, 
-    setTeam, 
-    updateSettings, 
-    startGame, 
-    error, 
-    clearError 
-  } = useGame();
-  
-  const [copied, setCopied] = useState(false);
+export interface LobbyPageProps {
+  onOpenRules?: () => void;
+  /** Optional preview overrides (used strictly in ?previewPregame=... QA mode) */
+  previewGameState?: GameState;
+  previewLocalPlayer?: Player;
+  previewConnectionStatus?: RealtimeConnectionStatus;
+  previewBannerLabel?: string;
+  onPreviewUpdateSettings?: (patch: Partial<GameSettings>) => void;
+  onPreviewSelectToken?: (tokenId: string) => void;
+  onPreviewSelectColor?: (colorHex: string) => void;
+  onPreviewToggleReady?: (ready: boolean) => void;
+  onPreviewSetTeam?: (team: 'gold' | 'silver') => void;
+  onPreviewSendChat?: (text: string, isReaction?: boolean) => void;
+  onPreviewStartGame?: () => void;
+  onPreviewLeave?: () => void;
+}
+
+export const LobbyPage: React.FC<LobbyPageProps> = ({
+  onOpenRules,
+  previewGameState,
+  previewLocalPlayer,
+  previewConnectionStatus,
+  previewBannerLabel,
+  onPreviewUpdateSettings,
+  onPreviewSelectToken,
+  onPreviewSelectColor,
+  onPreviewToggleReady,
+  onPreviewSetTeam,
+  onPreviewSendChat,
+  onPreviewStartGame,
+  onPreviewLeave
+}) => {
+  let ctx: ReturnType<typeof useGame> | null = null;
+  try {
+    ctx = useGame();
+  } catch {
+    ctx = null;
+  }
+
+  const gameState = previewGameState ?? ctx?.gameState ?? null;
+  const player = previewLocalPlayer ?? ctx?.player ?? null;
+  const connectionStatus = previewConnectionStatus ?? ctx?.connectionStatus ?? 'CONNECTED';
+  const error = previewGameState ? null : ctx?.error ?? null;
+  const clearError = ctx?.clearError;
+  const retryConnection = ctx?.retryConnection;
+
+  const toggleReady = onPreviewToggleReady ?? ctx?.toggleReady;
+  const setTeam = onPreviewSetTeam ?? ctx?.setTeam;
+  const updateSettings = onPreviewUpdateSettings ?? ctx?.updateSettings;
+  const selectToken = onPreviewSelectToken ?? ctx?.selectToken;
+  const selectColor = onPreviewSelectColor ?? ctx?.selectColor;
+  const startGame = onPreviewStartGame ?? ctx?.startGame;
+  const sendChat = onPreviewSendChat ?? ctx?.sendChat;
+  const leaveRoom = onPreviewLeave ?? ctx?.leaveRoom;
+
+  const [copiedCode, setCopiedCode] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [isMuted, setIsMuted] = useState(soundEngine.getMuted());
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const [isLaunching, setIsLaunching] = useState(false);
+  const autoAssignRef = useRef<string>('');
+
+  const worldId: WorldThemeId = normalizeWorldTheme(gameState?.settings.theme);
+  const themeConfig = useMemo(() => getThemeConfig(worldId), [worldId]);
+  const cssVars = useMemo(() => getThemeCssVars(themeConfig), [themeConfig]);
+
+  // Sync audio world character with active lobby world
+  useEffect(() => {
+    soundEngine.setWorld(worldId);
+  }, [worldId]);
+
+  const players = gameState?.players ?? [];
+
+  const colorMap = useMemo(() => resolveUniquePlayerColors(players), [players]);
+  const tokenMap = useMemo(
+    () => resolveWorldTokensForPlayers(players, themeConfig.tokens),
+    [players, themeConfig.tokens]
+  );
+
+  // Auto-assign the first unclaimed world token if local player's token doesn't belong to the active
+  // world or collides with an earlier player (keeps lobby state cleanly synchronized across browsers)
+  useEffect(() => {
+    if (!gameState || !player || !selectToken || previewGameState) return;
+    const validIds = new Set(themeConfig.tokens.map(t => t.id));
+    const otherPlayerHasSame = players.some(
+      (p, idx) =>
+        p.id !== player.id &&
+        p.token === player.token &&
+        idx < players.findIndex(me => me.id === player.id)
+    );
+    const needsAutoAssign = !validIds.has(player.token) || otherPlayerHasSame;
+    const assignKey = `${worldId}-${player.id}-${player.token}-${players.length}`;
+
+    if (needsAutoAssign && autoAssignRef.current !== assignKey) {
+      autoAssignRef.current = assignKey;
+      const resolved = tokenMap[player.id];
+      if (resolved && resolved.id !== player.token) {
+        void selectToken(resolved.id);
+      }
+    }
+  }, [gameState, player, players, worldId, themeConfig.tokens, tokenMap, selectToken, previewGameState]);
+
+  // Map of tokens claimed by OTHER players (for taken-state UI + duplicate prevention)
+  const takenByPlayerMap = useMemo(() => {
+    const map: Record<string, Pick<Player, 'id' | 'nickname' | 'color'>> = {};
+    if (!player) return map;
+    for (const p of players) {
+      if (p.id === player.id) continue;
+      const resolved = tokenMap[p.id];
+      if (resolved) {
+        map[resolved.id] = {
+          id: p.id,
+          nickname: p.nickname,
+          color: colorMap[p.id]?.hex ?? p.color
+        };
+      }
+    }
+    return map;
+  }, [players, player, tokenMap, colorMap]);
+
+  // Countdown sequence before invoking real startGame()
+  useEffect(() => {
+    if (countdown === null) return;
+    if (countdown <= 0) {
+      setCountdown(null);
+      setIsLaunching(true);
+      startGame?.();
+      const safetyReset = window.setTimeout(() => setIsLaunching(false), 3500);
+      return () => window.clearTimeout(safetyReset);
+    }
+
+    soundEngine.play('token_step', worldId);
+    const timer = window.setTimeout(() => {
+      setCountdown(prev => (prev !== null ? prev - 1 : null));
+    }, 850);
+    return () => window.clearTimeout(timer);
+  }, [countdown, startGame, worldId]);
 
   if (!gameState || !player) return null;
 
   const isHost = player.isHost;
   const isReady = player.isReady;
-  const readyCount = gameState.players.filter(p => p.isReady).length;
-  const canStart = isHost && gameState.players.length >= 2 && readyCount === gameState.players.length;
+  const myResolvedToken = tokenMap[player.id] ?? themeConfig.tokens[0];
+  const myColor = colorMap[player.id]?.hex ?? player.color;
 
-  const handleCopyLink = () => {
-    const url = `${window.location.origin}?room=${gameState.roomCode}`;
-    navigator.clipboard.writeText(url);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  // Authoritative Start Game readiness evaluation with exact dynamic disable reason
+  const unreadyPlayers = players.filter(p => !p.isReady);
+  let startDisabledReason: string | null = null;
+  if (players.length < 2) {
+    startDisabledReason = 'Need at least 2 players to start.';
+  } else if (unreadyPlayers.length === 1) {
+    startDisabledReason = `Waiting for ${unreadyPlayers[0].nickname} to ready up.`;
+  } else if (unreadyPlayers.length > 1) {
+    startDisabledReason = `Waiting for ${unreadyPlayers.length} players to ready up.`;
+  }
+  const canStart = isHost && startDisabledReason === null && countdown === null && !isLaunching;
+
+  const handleCopyCode = () => {
+    soundEngine.play('ui_click', worldId);
+    navigator.clipboard?.writeText(gameState.roomCode).catch(() => {});
+    setCopiedCode(true);
+    window.setTimeout(() => setCopiedCode(false), 1800);
   };
 
-  const currentTheme = THEME_CONFIGS[gameState.settings.theme || 'classic'];
+  const handleCopyInviteLink = () => {
+    soundEngine.play('ui_click', worldId);
+    const url = `${window.location.origin}?room=${gameState.roomCode}`;
+    navigator.clipboard?.writeText(url).catch(() => {});
+    setCopiedLink(true);
+    window.setTimeout(() => setCopiedLink(false), 1800);
+  };
+
+  const handleInitiateStart = () => {
+    if (!canStart) return;
+    soundEngine.play('turn_start', worldId);
+    const prefersReduced =
+      typeof window !== 'undefined' &&
+      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    if (prefersReduced) {
+      setIsLaunching(true);
+      startGame?.();
+    } else {
+      setCountdown(3);
+    }
+  };
+
+  const handleSelectToken = (tokenId: string) => {
+    soundEngine.play('ui_click', worldId);
+    void selectToken?.(tokenId);
+  };
+
+  const handleSelectColor = (colorHex: string) => {
+    soundEngine.play('ui_click', worldId);
+    void selectColor?.(colorHex);
+  };
+
+  const handleWorldChange = (nextWorld: WorldThemeId) => {
+    if (!isHost) return;
+    soundEngine.play('ui_click', nextWorld);
+    updateSettings?.({ theme: nextWorld });
+  };
+
+  const isChamfered = themeConfig.chamfered;
+  const headingTransform = themeConfig.fonts.headingUppercase ? 'uppercase' : 'none';
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-8 py-8 selection:bg-[#B58A30] selection:text-white">
-      {/* Top Banner: Invitation & Atmosphere */}
-      <div className="bg-[#122419] border-2 border-[#B58A30] rounded-3xl p-6 sm:p-8 mb-8 shadow-2xl relative overflow-hidden">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
-          <div>
-            <div className="inline-flex items-center space-x-2 text-xs font-serif uppercase tracking-widest px-3 py-1 rounded-full bg-[#183626] border border-[#B58A30]/50 text-[#FCE794] mb-2">
-              <Sparkles className="w-3.5 h-3.5 text-[#D4AF37]" />
-              <span>Multiplayer Gathering Table</span>
-            </div>
-            <h1 className="text-3xl sm:text-4xl font-display font-black text-[#F9F5EC]">
-              The High Council Room
-            </h1>
-            <p className="text-sm font-serif text-[#C8BCAB] mt-1">
-              Assemble 4 to 6 tycoons. Select your theme and rules, ready up, and inaugurate the match.
-            </p>
-          </div>
-
-          {/* Table Seal & Room Code */}
-          <div className="bg-[#0A160F] p-4 rounded-2xl border border-[#4A3828] flex items-center space-x-5 shadow-inner">
-            <div>
-              <span className="text-[10px] font-serif uppercase tracking-widest text-[#8C7A65] block">Table Access Code</span>
-              <span className="font-mono text-3xl font-black text-[#FCE794] tracking-widest block">
-                {gameState.roomCode}
-              </span>
-            </div>
-            <button
-              onClick={handleCopyLink}
-              className="py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#D4AF37] to-[#B8860B] hover:brightness-110 text-[#12241A] font-display font-black text-xs uppercase tracking-wider transition flex items-center space-x-1.5 shadow-md"
-            >
-              {copied ? (
-                <>
-                  <Check className="w-4 h-4 text-emerald-950" />
-                  <span>Copied!</span>
-                </>
-              ) : (
-                <>
-                  <Copy className="w-4 h-4" />
-                  <span>Share Table</span>
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Error alert */}
-      {error && (
-        <div className="mb-6 p-4 bg-[#3B0E14] border-2 border-[#8B1A24] rounded-2xl text-red-200 text-sm flex items-center justify-between">
-          <span className="font-sans font-medium">{error}</span>
-          <button onClick={clearError} className="font-bold text-red-300 hover:text-white">✕</button>
+    <div
+      data-theme={themeConfig.id}
+      data-testid="lobby-page"
+      style={cssVars}
+      className="tv-pregame-shell h-screen w-full overflow-hidden flex flex-col p-2.5 sm:p-3 gap-2.5"
+    >
+      {/* Optional Preview Mode Label (never shown in live multiplayer) */}
+      {previewBannerLabel && (
+        <div
+          style={{
+            backgroundColor: 'color-mix(in srgb, var(--accent) 18%, var(--bg))',
+            borderColor: 'color-mix(in srgb, var(--accent) 55%, transparent)',
+            color: 'var(--accent)'
+          }}
+          className="px-3 py-1 border text-[10px] font-bold uppercase tracking-widest flex items-center justify-between shrink-0"
+        >
+          <span>Simulated Preview Data · {previewBannerLabel}</span>
+          <span>Phase G Visual Verification</span>
         </div>
       )}
 
-      {/* Main Gathering Table Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        
-        {/* Left: Table Seats (7 cols) */}
-        <div className="lg:col-span-7 space-y-4">
-          <div className="flex items-center justify-between border-b border-[#3B281A] pb-2">
-            <h2 className="text-xs font-serif uppercase tracking-widest text-[#D4AF37] flex items-center space-x-2">
-              <Users className="w-4 h-4 text-[#D4AF37]" />
-              <span>Table Seats ({gameState.players.length} / {gameState.settings.maxPlayers})</span>
-            </h2>
-            <span className="text-xs font-mono text-[#FCE794]">
-              {readyCount} of {gameState.players.length} Ready
+      {/* Connection Lost / Reconnecting Alert */}
+      <ConnectionStatusBanner
+        status={connectionStatus}
+        themeConfig={themeConfig}
+        errorDetail={error}
+        onRetry={retryConnection}
+      />
+
+      {/* Area A: ROOM INFORMATION HEADER */}
+      <header
+        data-testid="lobby-room-header"
+        data-chamfered={isChamfered ? 'true' : 'false'}
+        className="tv-pregame-surface px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 shrink-0"
+      >
+        {/* Left: Brand + Room Name + World Badge */}
+        <div className="flex items-center gap-3 min-w-0">
+          <div
+            style={{
+              backgroundColor: 'color-mix(in srgb, var(--accent) 18%, var(--bg))',
+              borderColor: 'var(--accent)',
+              borderRadius: isChamfered ? '0px' : worldId === 'wompwomp' ? '10px' : '4px'
+            }}
+            className="w-9 h-9 border flex items-center justify-center shrink-0 overflow-hidden"
+          >
+            {worldId === 'wompwomp' ? (
+              <img
+                src="/tokens/wompwomp/peach.png"
+                alt="WorldWompWomp"
+                draggable={false}
+                className="w-7 h-7 object-contain"
+              />
+            ) : (
+              <Crown className="w-4 h-4" style={{ color: 'var(--accent)' }} />
+            )}
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h1
+                style={{
+                  fontFamily: 'var(--font-heading)',
+                  textTransform: headingTransform
+                }}
+                className="text-sm sm:text-base font-black tracking-wider truncate"
+              >
+                {themeConfig.name} Lobby
+              </h1>
+              <span
+                style={{
+                  backgroundColor: 'color-mix(in srgb, var(--accent) 16%, var(--bg))',
+                  borderColor: 'color-mix(in srgb, var(--accent) 48%, transparent)',
+                  color: 'var(--accent)',
+                  borderRadius: isChamfered ? '0px' : '9999px'
+                }}
+                className="px-2 py-0.5 border text-[10px] font-bold uppercase tracking-wider tabular-nums shrink-0"
+              >
+                {players.length}/{gameState.settings.maxPlayers} Players
+              </span>
+            </div>
+            <div className="text-[11px] opacity-70 truncate">
+              {isHost
+                ? 'You are the room host · Configure world & rules, then launch when ready'
+                : `Hosted by ${players.find(p => p.isHost)?.nickname ?? 'Host'} · Pick your character & ready up`}
+            </div>
+          </div>
+        </div>
+
+        {/* Center: Prominent Room Code + Copy Code + Copy Invite Link */}
+        <div
+          style={{
+            backgroundColor: 'color-mix(in srgb, var(--bg) 90%, #000000)',
+            borderColor: 'color-mix(in srgb, var(--tile-border) 62%, transparent)',
+            borderRadius: isChamfered ? '0px' : '4px'
+          }}
+          className="px-3 py-1.5 border flex items-center gap-2.5"
+        >
+          <div>
+            <span className="block text-[9px] uppercase tracking-[0.18em] opacity-55 leading-none">
+              Room Code
+            </span>
+            <span
+              data-testid="lobby-room-code"
+              style={{ color: 'var(--accent)' }}
+              className="font-mono font-black text-lg tracking-[0.22em] leading-tight"
+            >
+              {gameState.roomCode}
             </span>
           </div>
 
-          {/* Seat Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {gameState.players.map((p) => {
-              const isMe = p.id === player.id;
-              const avatar = getAvatarById(p.avatar);
-              const token = getTokenById(p.token);
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={handleCopyCode}
+              data-testid="copy-code-btn"
+              data-chamfered={isChamfered ? 'true' : 'false'}
+              className="tv-hud-btn tv-hud-btn-secondary px-2.5 py-1.5 text-[10px] uppercase tracking-wider"
+              title="Copy 6-character room code"
+            >
+              {copiedCode ? (
+                <Check className="w-3.5 h-3.5 text-emerald-400" />
+              ) : (
+                <Copy className="w-3.5 h-3.5" />
+              )}
+              <span>{copiedCode ? 'Copied' : 'Code'}</span>
+            </button>
 
-              return (
-                <div
-                  key={p.id}
-                  style={{ borderLeftColor: p.color }}
-                  className={`p-4 rounded-2xl bg-[#0F2218] border-y border-r border-l-4 border-[#2D3E32] relative overflow-hidden transition ${
-                    isMe ? 'ring-2 ring-[#D4AF37]' : ''
-                  }`}
-                >
-                  <div className="flex items-center space-x-3">
-                    <div 
-                      className="w-14 h-14 rounded-2xl bg-[#142B1F] border-2 p-1 relative flex items-center justify-center shadow"
-                      style={{ borderColor: p.color }}
-                    >
-                      <avatar.Component className="w-full h-full" />
-                      {p.isHost && (
-                        <div className="absolute -top-1.5 -right-1.5 bg-[#D4AF37] rounded-full p-1 shadow">
-                          <Crown className="w-3 h-3 text-[#12241A]" />
-                        </div>
-                      )}
-                    </div>
+            <button
+              type="button"
+              onClick={handleCopyInviteLink}
+              data-testid="copy-invite-link-btn"
+              data-chamfered={isChamfered ? 'true' : 'false'}
+              className="tv-hud-btn tv-hud-btn-primary px-2.5 py-1.5 text-[10px] uppercase tracking-wider"
+              title="Copy direct join link"
+            >
+              {copiedLink ? (
+                <Check className="w-3.5 h-3.5" />
+              ) : (
+                <Link2 className="w-3.5 h-3.5" />
+              )}
+              <span>{copiedLink ? 'Link Copied' : 'Invite Link'}</span>
+            </button>
+          </div>
+        </div>
 
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center space-x-1.5">
-                        <span className="font-display font-bold text-white text-sm truncate">
-                          {p.nickname}
-                        </span>
-                        {isMe && (
-                          <span className="text-[9px] bg-[#1E3B2B] text-[#D4AF37] px-1.5 py-0.2 rounded border border-[#B58A30]/40 font-mono">
-                            You
-                          </span>
-                        )}
-                      </div>
+        {/* Right: Audio, Rules & Leave Room */}
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setIsMuted(soundEngine.toggleMute())}
+            aria-label={isMuted ? 'Unmute audio' : 'Mute audio'}
+            data-chamfered={isChamfered ? 'true' : 'false'}
+            className="tv-hud-btn tv-hud-btn-secondary p-2"
+          >
+            {isMuted ? (
+              <VolumeX className="w-3.5 h-3.5 text-rose-400" />
+            ) : (
+              <Volume2 className="w-3.5 h-3.5" style={{ color: 'var(--accent)' }} />
+            )}
+          </button>
 
-                      <div className="text-[11px] font-serif text-[#C8BCAB] flex items-center space-x-2 mt-0.5">
-                        <div className="w-4 h-4">
-                          <token.Component color={p.color} />
-                        </div>
-                        <span className="truncate">{token.name}</span>
-                      </div>
+          {onOpenRules && (
+            <button
+              type="button"
+              onClick={onOpenRules}
+              data-chamfered={isChamfered ? 'true' : 'false'}
+              className="tv-hud-btn tv-hud-btn-secondary px-2.5 py-1.5 text-[11px]"
+            >
+              <BookOpen className="w-3.5 h-3.5" style={{ color: 'var(--accent)' }} />
+              <span className="hidden xl:inline">Rules</span>
+            </button>
+          )}
 
-                      {/* Team Tag if team mode is enabled */}
-                      {gameState.settings.teamMode && (
-                        <div className="mt-1">
-                          <span className={`text-[10px] uppercase font-mono font-bold px-2 py-0.5 rounded-full ${
-                            p.team === 'silver' ? 'bg-slate-700 text-slate-200' : 'bg-amber-700/80 text-amber-200'
-                          }`}>
-                            Team {p.team === 'silver' ? 'Silver' : 'Gold'}
-                          </span>
-                        </div>
-                      )}
-                    </div>
+          <button
+            type="button"
+            onClick={() => leaveRoom?.()}
+            data-testid="lobby-leave-btn"
+            data-chamfered={isChamfered ? 'true' : 'false'}
+            className="tv-hud-btn tv-hud-btn-danger px-2.5 py-1.5 text-[11px]"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span>Leave</span>
+          </button>
+        </div>
+      </header>
 
-                    {/* Ready Stamp */}
-                    <div>
-                      {p.isReady ? (
-                        <span className="inline-flex items-center space-x-1 text-xs font-serif font-bold px-2.5 py-1 rounded-full bg-emerald-950/80 text-emerald-400 border border-emerald-500/40 shadow-sm">
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                          <span>Ready</span>
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center space-x-1 text-xs font-serif px-2.5 py-1 rounded-full bg-[#18181B] text-[#8C7A65] border border-[#3A291A]">
-                          <Clock className="w-3.5 h-3.5" />
-                          <span>Waiting</span>
-                        </span>
-                      )}
-                    </div>
-                  </div>
+      {/* Non-blocking Error Banner inside Lobby */}
+      {error && (
+        <div
+          role="alert"
+          data-testid="lobby-error-banner"
+          style={{
+            backgroundColor: 'rgba(153, 27, 27, 0.28)',
+            borderColor: 'rgba(239, 68, 68, 0.6)',
+            borderRadius: isChamfered ? '0px' : '4px'
+          }}
+          className="px-3.5 py-1.5 border text-rose-100 text-xs flex items-center justify-between gap-3 shrink-0"
+        >
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-rose-300 shrink-0" />
+            <span>{error}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => clearError?.()}
+            className="text-rose-200 hover:text-white"
+            aria-label="Dismiss error"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
-                  {/* Team Switcher for local player */}
-                  {gameState.settings.teamMode && isMe && (
-                    <div className="mt-3 pt-2 border-t border-[#2D3E32] flex items-center justify-between text-xs font-serif">
-                      <span className="text-[#8C7A65]">Switch Cartel:</span>
-                      <div className="flex space-x-2">
-                        <button
-                          type="button"
-                          onClick={() => setTeam('gold')}
-                          className={`px-2 py-0.5 rounded text-[11px] font-bold ${
-                            p.team !== 'silver' ? 'bg-[#D4AF37] text-black font-black' : 'bg-[#183626] text-[#FCE794]'
-                          }`}
-                        >
-                          Team Gold
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setTeam('silver')}
-                          className={`px-2 py-0.5 rounded text-[11px] font-bold ${
-                            p.team === 'silver' ? 'bg-slate-300 text-black font-black' : 'bg-[#183626] text-slate-300'
-                          }`}
-                        >
-                          Team Silver
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-
-            {/* Empty Table Seats */}
-            {Array.from({ length: Math.max(0, gameState.settings.maxPlayers - gameState.players.length) }).map((_, idx) => (
-              <div
-                key={`empty-${idx}`}
-                className="p-4 rounded-2xl bg-[#0A160F]/60 border-2 border-dashed border-[#2D3E32] flex items-center justify-center space-x-2 text-[#655745] text-xs font-serif"
-              >
-                <span>Seat {gameState.players.length + idx + 1} Open for Challenger</span>
-              </div>
-            ))}
+      {/* MAIN 3-COLUMN LOBBY WORKSPACE (Zero page scroll at 1366x768 and 1920x1080) */}
+      <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-2.5">
+        {/* LEFT COLUMN (4 cols): Player Roster Slots + Compact Lobby Social Chat */}
+        <div className="lg:col-span-4 min-h-0 flex flex-col gap-2.5">
+          <div className="flex-[1.25] min-h-0 flex flex-col">
+            <LobbyPlayerSlots
+              players={players}
+              maxPlayers={gameState.settings.maxPlayers}
+              localPlayerId={player.id}
+              themeConfig={themeConfig}
+              tokenMap={tokenMap}
+              colorMap={colorMap}
+              teamMode={gameState.settings.teamMode}
+              connectionStatus={connectionStatus}
+              onSetTeam={team => setTeam?.(team)}
+            />
           </div>
 
-          {/* Ready & Start Action Controls */}
-          <div className="bg-[#122419] border-2 border-[#4A3828] rounded-2xl p-6 flex flex-col sm:flex-row items-center justify-between gap-4 mt-6">
-            <div>
-              {!isHost && (
+          <div className="flex-1 min-h-[165px] flex flex-col">
+            <ChatBox
+              gameState={gameState}
+              localPlayer={player}
+              themeConfig={themeConfig}
+              onSendChat={(text, isReaction) => sendChat?.(text, isReaction)}
+            />
+          </div>
+        </div>
+
+        {/* CENTER COLUMN (5 cols): Dedicated Character / VALORANT Agent Selection & Showcase */}
+        <div className="lg:col-span-5 min-h-0 flex flex-col">
+          <CharacterSelectPanel
+            themeConfig={themeConfig}
+            selectedTokenId={myResolvedToken.id}
+            localPlayerName={player.nickname}
+            localPlayerColor={myColor}
+            isLocalReady={isReady}
+            takenByPlayerMap={takenByPlayerMap}
+            onSelectToken={handleSelectToken}
+            onSelectColor={handleSelectColor}
+            onToggleReady={!isHost ? () => toggleReady?.(!isReady) : undefined}
+            showReadyAction={!isHost}
+          />
+        </div>
+
+        {/* RIGHT COLUMN (3 cols): World Selector + Host Settings + Ready / Start Game Controls */}
+        <div
+          data-chamfered={isChamfered ? 'true' : 'false'}
+          className="lg:col-span-3 tv-pregame-surface min-h-0 flex flex-col justify-between p-3.5 gap-3 overflow-hidden"
+        >
+          <div className="flex-1 min-h-0 overflow-y-auto tv-hud-scroll space-y-4 pr-0.5">
+            {/* World Selector (Live synced by Host; Read-only for non-hosts) */}
+            <WorldSelector
+              selectedWorld={worldId}
+              onSelectWorld={handleWorldChange}
+              canEdit={isHost}
+              layout="compact"
+            />
+
+            {/* Divider */}
+            <div
+              style={{ borderColor: 'color-mix(in srgb, var(--tile-border) 42%, transparent)' }}
+              className="border-t"
+            />
+
+            {/* Real Backend Match Settings */}
+            <HostSettingsPanel
+              settings={gameState.settings}
+              themeConfig={themeConfig}
+              isHost={isHost}
+              currentPlayerCount={players.length}
+              onUpdateSettings={patch => updateSettings?.(patch)}
+            />
+          </div>
+
+          {/* Bottom Ready & Launch Action Footer */}
+          <div
+            style={{ borderColor: 'color-mix(in srgb, var(--tile-border) 48%, transparent)' }}
+            className="pt-3 border-t space-y-2 shrink-0"
+          >
+            {isHost ? (
+              <>
                 <button
                   type="button"
-                  onClick={() => toggleReady(!isReady)}
-                  className={`w-full sm:w-auto py-3.5 px-8 rounded-xl font-display font-black text-sm uppercase tracking-wider transition flex items-center justify-center space-x-2 shadow-lg ${
-                    isReady
-                      ? 'bg-[#2E1810] text-[#D4AF37] border border-[#B58A30]'
-                      : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-900/50'
+                  onClick={handleInitiateStart}
+                  disabled={!canStart}
+                  data-testid="start-game-btn"
+                  data-chamfered={isChamfered ? 'true' : 'false'}
+                  className="tv-hud-btn tv-hud-btn-primary w-full py-3 text-xs sm:text-sm uppercase tracking-[0.16em]"
+                >
+                  <Play className="w-4 h-4 fill-current" />
+                  <span>Start Game</span>
+                </button>
+                <div
+                  data-testid="start-status-reason"
+                  className={`text-[11px] text-center font-semibold ${
+                    canStart ? 'text-emerald-300' : 'opacity-75'
                   }`}
                 >
-                  <CheckCircle2 className="w-5 h-5" />
-                  <span>{isReady ? 'Standing By (Click to Cancel)' : 'Declare Ready!'}</span>
-                </button>
-              )}
-
-              {isHost && (
-                <div className="text-xs font-serif text-[#C8BCAB]">
-                  {gameState.players.length < 2
-                    ? 'Waiting for at least 1 more challenger to take a seat...'
-                    : !canStart
-                    ? 'Waiting for all seated tycoons to declare Ready...'
-                    : 'All tycoons ready! Launch the game board.'}
+                  {startDisabledReason ?? `All ${players.length} players ready · Launch match`}
                 </div>
-              )}
-            </div>
-
-            {isHost && (
-              <button
-                type="button"
-                onClick={startGame}
-                disabled={!canStart}
-                className="w-full sm:w-auto py-4 px-10 rounded-xl font-display font-black text-sm uppercase tracking-widest bg-gradient-to-r from-[#D4AF37] via-[#E2B755] to-[#B8860B] text-[#12241A] shadow-gold-seal hover:brightness-110 active:scale-[0.99] transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
-              >
-                <Play className="w-5 h-5 fill-current" />
-                <span>Begin Match</span>
-              </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => toggleReady?.(!isReady)}
+                  data-testid="ready-toggle-btn"
+                  data-chamfered={isChamfered ? 'true' : 'false'}
+                  className={`tv-hud-btn w-full py-3 text-xs sm:text-sm uppercase tracking-[0.16em] ${
+                    isReady ? 'tv-hud-btn-secondary' : 'tv-hud-btn-primary'
+                  }`}
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>{isReady ? 'Ready (Click to Unready)' : 'Ready Up'}</span>
+                </button>
+                <div className="text-[11px] text-center opacity-70">
+                  {isReady
+                    ? 'Waiting for host to launch the match.'
+                    : 'Select your character and ready up when set.'}
+                </div>
+              </>
             )}
           </div>
         </div>
-
-        {/* Right: Board Themes & Host Rules Panel (5 cols) */}
-        <div className="lg:col-span-5 space-y-6">
-          {/* 4 Board Themes Showcase */}
-          <div className="bg-[#0F2218] border-2 border-[#4A3828] rounded-2xl p-5 space-y-4 shadow-xl">
-            <div className="flex items-center justify-between border-b border-[#2D3E32] pb-2">
-              <span className="text-xs font-serif uppercase tracking-widest text-[#D4AF37] flex items-center space-x-1.5">
-                <Sparkles className="w-4 h-4 text-[#D4AF37]" />
-                <span>Board Theme Aesthetics</span>
-              </span>
-              <span className="text-[10px] font-mono text-[#C8BCAB]">
-                {isHost ? 'Host Controls' : 'Host Selected'}
-              </span>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              {(Object.keys(THEME_CONFIGS) as BoardTheme[]).map((themeKey) => {
-                const conf = THEME_CONFIGS[themeKey];
-                const isSelected = (gameState.settings.theme || 'classic') === themeKey;
-
-                return (
-                  <button
-                    key={themeKey}
-                    type="button"
-                    disabled={!isHost}
-                    onClick={() => updateSettings({ theme: themeKey })}
-                    className={`p-3 rounded-xl border text-left transition relative ${
-                      isSelected
-                        ? 'border-[#D4AF37] bg-[#1E3B2B] shadow-brass-glow'
-                        : 'border-[#2D3E32] bg-[#0A160F] hover:border-[#655745]'
-                    } ${!isHost ? 'cursor-default' : ''}`}
-                  >
-                    <div 
-                      className="w-full h-8 rounded-lg mb-2 border border-white/20 flex items-center justify-center text-xs font-bold text-white shadow-inner"
-                      style={{ backgroundColor: conf.previewColor }}
-                    >
-                      {conf.name}
-                    </div>
-                    <span className="text-[11px] font-display font-bold text-white block">
-                      {conf.name}
-                    </span>
-                    <span className="text-[9px] font-serif text-[#8C7A65] block line-clamp-1">
-                      {conf.tagline}
-                    </span>
-                    {isSelected && (
-                      <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-[#D4AF37]" />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Host Custom Match Configuration */}
-          <div className="bg-[#0F2218] border-2 border-[#4A3828] rounded-2xl p-5 space-y-4 shadow-xl">
-            <div className="flex items-center space-x-2 border-b border-[#2D3E32] pb-2">
-              <Sliders className="w-4 h-4 text-[#D4AF37]" />
-              <span className="text-xs font-serif uppercase tracking-widest text-[#D4AF37]">
-                Custom Table Rules
-              </span>
-            </div>
-
-            <div className="space-y-3 text-xs font-serif">
-              {/* Starting Cash */}
-              <div className="flex items-center justify-between">
-                <span className="text-[#C8BCAB]">Starting Capital:</span>
-                {isHost ? (
-                  <select
-                    value={gameState.settings.startingBalance}
-                    onChange={(e) => updateSettings({ startingBalance: Number(e.target.value) })}
-                    className="bg-[#0A160F] border border-[#4A3828] rounded-lg px-2.5 py-1 text-white font-mono"
-                  >
-                    <option value={1000}>$1,000</option>
-                    <option value={1500}>$1,500 (Standard)</option>
-                    <option value={2000}>$2,000</option>
-                    <option value={2500}>$2,500</option>
-                  </select>
-                ) : (
-                  <span className="font-mono font-bold text-[#FCE794]">${gameState.settings.startingBalance}</span>
-                )}
-              </div>
-
-              {/* Turn Duration */}
-              <div className="flex items-center justify-between">
-                <span className="text-[#C8BCAB]">Turn Duration:</span>
-                {isHost ? (
-                  <select
-                    value={gameState.settings.turnTimeoutSeconds}
-                    onChange={(e) => updateSettings({ turnTimeoutSeconds: Number(e.target.value) })}
-                    className="bg-[#0A160F] border border-[#4A3828] rounded-lg px-2.5 py-1 text-white font-mono"
-                  >
-                    <option value={30}>30 Seconds (Fast)</option>
-                    <option value={45}>45 Seconds (Standard)</option>
-                    <option value={60}>60 Seconds</option>
-                    <option value={90}>90 Seconds (Casual)</option>
-                  </select>
-                ) : (
-                  <span className="font-mono font-bold text-white">{gameState.settings.turnTimeoutSeconds}s</span>
-                )}
-              </div>
-
-              {/* Free Parking Jackpot */}
-              <div className="flex items-center justify-between">
-                <span className="text-[#C8BCAB]">Free Parking Jackpot:</span>
-                {isHost ? (
-                  <button
-                    type="button"
-                    onClick={() => updateSettings({ freeParkingJackpot: !gameState.settings.freeParkingJackpot })}
-                    className={`px-3 py-1 rounded-lg text-xs font-bold transition ${
-                      gameState.settings.freeParkingJackpot ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-400'
-                    }`}
-                  >
-                    {gameState.settings.freeParkingJackpot ? 'Enabled' : 'Disabled'}
-                  </button>
-                ) : (
-                  <span className="font-bold text-emerald-400">
-                    {gameState.settings.freeParkingJackpot ? 'Enabled' : 'Disabled'}
-                  </span>
-                )}
-              </div>
-
-              {/* Team Mode */}
-              <div className="flex items-center justify-between">
-                <span className="text-[#C8BCAB]">Cartel Team Mode:</span>
-                {isHost ? (
-                  <button
-                    type="button"
-                    onClick={() => updateSettings({ teamMode: !gameState.settings.teamMode })}
-                    className={`px-3 py-1 rounded-lg text-xs font-bold transition ${
-                      gameState.settings.teamMode ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-400'
-                    }`}
-                  >
-                    {gameState.settings.teamMode ? 'Active (2v2/3v3)' : 'Free-for-All'}
-                  </button>
-                ) : (
-                  <span className="font-bold text-[#FCE794]">
-                    {gameState.settings.teamMode ? 'Active (Teams)' : 'Free-for-All'}
-                  </span>
-                )}
-              </div>
-
-              {/* Auctions & Trading toggles */}
-              <div className="flex items-center justify-between">
-                <span className="text-[#C8BCAB]">Auctions:</span>
-                <span className="text-white font-mono">{gameState.settings.auctionEnabled ? 'Enabled' : 'Disabled'}</span>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
+
+      {/* Themed 3, 2, 1 Launch Countdown & World Transition Overlay */}
+      <LaunchTransitionOverlay
+        visible={countdown !== null || isLaunching}
+        mode={countdown !== null ? 'countdown' : 'launching'}
+        countdownValue={countdown ?? 1}
+        themeConfig={themeConfig}
+        subtitle={
+          countdown !== null
+            ? `Deploying ${players.length} players into ${themeConfig.name}...`
+            : 'Loading live tabletop board...'
+        }
+      />
     </div>
   );
 };

@@ -65,6 +65,9 @@ interface GameContextType {
   joinRoom: (roomCode: string) => Promise<boolean>;
   toggleReady: (ready: boolean) => void;
   setTeam: (team: 'gold' | 'silver') => void;
+  selectToken: (tokenId: string) => Promise<boolean>;
+  selectColor: (colorHex: string) => Promise<boolean>;
+  retryConnection: () => void;
   updateSettings: (settings: any) => void;
   startGame: () => void;
   rollDice: () => void;
@@ -430,21 +433,45 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       soundEngine.playClick();
 
       if (USE_SUPABASE) {
-        const res = await supabaseGameService.createRoom(session, settings);
-        if (!res.success || !res.data) {
-          setError(res.error || 'Failed to create room.');
+        try {
+          const timeoutPromise = new Promise<{ success: false; error: string }>(resolve =>
+            setTimeout(
+              () => resolve({ success: false, error: 'Connection timed out while creating room. Please retry.' }),
+              12000
+            )
+          );
+          const res = await Promise.race([
+            supabaseGameService.createRoom(session, settings),
+            timeoutPromise
+          ]);
+          if (!res.success || !('data' in res) || !res.data) {
+            setError(res.error || 'Failed to create room.');
+            return false;
+          }
+          const bound = bindAuthenticatedUserId(res.data.userId);
+          setSession(bound);
+          sessionStorage.setItem('tycoonvale_active_room', res.data.roomCode);
+          await subscribeToSupabaseRoom(res.data.roomId, res.data.roomCode, res.data.userId, bound);
+          await refreshSupabaseRoomState(res.data.roomId, res.data.userId);
+          return true;
+        } catch (err: any) {
+          setError(err?.message || 'Unable to reach game server. Check your connection and retry.');
           return false;
         }
-        const bound = bindAuthenticatedUserId(res.data.userId);
-        setSession(bound);
-        sessionStorage.setItem('tycoonvale_active_room', res.data.roomCode);
-        await subscribeToSupabaseRoom(res.data.roomId, res.data.roomCode, res.data.userId, bound);
-        await refreshSupabaseRoomState(res.data.roomId, res.data.userId);
-        return true;
+      }
+
+      if (!socket || !socket.connected) {
+        setError('Unable to reach game server. Check your connection and retry.');
+        return false;
       }
 
       return new Promise(resolve => {
-        socket!.emit(SOCKET_EVENTS.ROOM_CREATE, { session, settings }, (res: any) => {
+        const timer = setTimeout(() => {
+          setError('Connection timed out while creating room.');
+          resolve(false);
+        }, 10000);
+        socket.emit(SOCKET_EVENTS.ROOM_CREATE, { session, settings }, (res: any) => {
+          clearTimeout(timer);
           if (res?.success) {
             applyGameState(res.gameState, session.sessionId);
             sessionStorage.setItem('tycoonvale_active_room', res.gameState.roomCode);
@@ -464,21 +491,45 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       soundEngine.playClick();
 
       if (USE_SUPABASE) {
-        const res = await supabaseGameService.joinRoom(roomCode, session);
-        if (!res.success || !res.data) {
-          setError(res.error || 'Failed to join room.');
+        try {
+          const timeoutPromise = new Promise<{ success: false; error: string }>(resolve =>
+            setTimeout(
+              () => resolve({ success: false, error: 'Connection timed out while joining room. Please retry.' }),
+              12000
+            )
+          );
+          const res = await Promise.race([
+            supabaseGameService.joinRoom(roomCode, session),
+            timeoutPromise
+          ]);
+          if (!res.success || !('data' in res) || !res.data) {
+            setError(res.error || 'Failed to join room.');
+            return false;
+          }
+          const bound = bindAuthenticatedUserId(res.data.userId);
+          setSession(bound);
+          sessionStorage.setItem('tycoonvale_active_room', res.data.roomCode);
+          await subscribeToSupabaseRoom(res.data.roomId, res.data.roomCode, res.data.userId, bound);
+          await refreshSupabaseRoomState(res.data.roomId, res.data.userId);
+          return true;
+        } catch (err: any) {
+          setError(err?.message || 'Unable to reach game server. Check your connection and retry.');
           return false;
         }
-        const bound = bindAuthenticatedUserId(res.data.userId);
-        setSession(bound);
-        sessionStorage.setItem('tycoonvale_active_room', res.data.roomCode);
-        await subscribeToSupabaseRoom(res.data.roomId, res.data.roomCode, res.data.userId, bound);
-        await refreshSupabaseRoomState(res.data.roomId, res.data.userId);
-        return true;
+      }
+
+      if (!socket || !socket.connected) {
+        setError('Unable to reach game server. Check your connection and retry.');
+        return false;
       }
 
       return new Promise(resolve => {
-        socket!.emit(SOCKET_EVENTS.ROOM_JOIN, { roomCode: roomCode.trim().toUpperCase(), session }, (res: any) => {
+        const timer = setTimeout(() => {
+          setError('Connection timed out while joining room.');
+          resolve(false);
+        }, 10000);
+        socket.emit(SOCKET_EVENTS.ROOM_JOIN, { roomCode: roomCode.trim().toUpperCase(), session }, (res: any) => {
+          clearTimeout(timer);
           if (res?.success) {
             applyGameState(res.gameState, session.sessionId);
             sessionStorage.setItem('tycoonvale_active_room', res.gameState.roomCode);
@@ -528,6 +579,119 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     },
     [socket, gameState, player, refreshSupabaseRoomState]
   );
+
+  const selectToken = useCallback(
+    async (tokenId: string): Promise<boolean> => {
+      // Outside a lobby, persist on the local guest session
+      if (!gameState || !player) {
+        updateSession({ token: tokenId });
+        return true;
+      }
+
+      if (gameState.phase !== 'LOBBY') {
+        return false;
+      }
+
+      // Enforce zero duplicate tokens among active lobby players
+      const claimedByOther = gameState.players.find(
+        p => p.id !== player.id && p.token === tokenId
+      );
+      if (claimedByOther) {
+        setError(`${claimedByOther.nickname} has already selected that character.`);
+        return false;
+      }
+
+      updateSession({ token: tokenId });
+
+      // Optimistic local state update for responsive UI feedback
+      setGameState(prev =>
+        prev
+          ? {
+              ...prev,
+              players: prev.players.map(p => (p.id === player.id ? { ...p, token: tokenId } : p))
+            }
+          : prev
+      );
+      setPlayer(prev => (prev ? { ...prev, token: tokenId } : prev));
+
+      if (USE_SUPABASE && activeRoomIdRef.current) {
+        const res = await supabaseGameService.updateMemberProfile(
+          activeRoomIdRef.current,
+          player.id,
+          { token: tokenId }
+        );
+        if (!res.success) {
+          setError(res.error || 'Could not update character selection.');
+          void refreshSupabaseRoomState(activeRoomIdRef.current);
+          return false;
+        }
+        void refreshSupabaseRoomState(activeRoomIdRef.current);
+      }
+
+      return true;
+    },
+    [gameState, player, updateSession, refreshSupabaseRoomState]
+  );
+
+  const selectColor = useCallback(
+    async (colorHex: string): Promise<boolean> => {
+      updateSession({ color: colorHex });
+      if (!gameState || !player || gameState.phase !== 'LOBBY') {
+        return true;
+      }
+
+      setGameState(prev =>
+        prev
+          ? {
+              ...prev,
+              players: prev.players.map(p => (p.id === player.id ? { ...p, color: colorHex } : p))
+            }
+          : prev
+      );
+      setPlayer(prev => (prev ? { ...prev, color: colorHex } : prev));
+
+      if (USE_SUPABASE && activeRoomIdRef.current) {
+        const res = await supabaseGameService.updateMemberProfile(
+          activeRoomIdRef.current,
+          player.id,
+          { color: colorHex }
+        );
+        if (!res.success) {
+          setError(res.error || 'Could not update player color.');
+          void refreshSupabaseRoomState(activeRoomIdRef.current);
+          return false;
+        }
+        void refreshSupabaseRoomState(activeRoomIdRef.current);
+      }
+
+      return true;
+    },
+    [gameState, player, updateSession, refreshSupabaseRoomState]
+  );
+
+  const retryConnection = useCallback(() => {
+    setError(null);
+    if (USE_SUPABASE) {
+      if (activeRoomIdRef.current) {
+        void supabaseRealtime.reconnectNow();
+        void refreshSupabaseRoomState(activeRoomIdRef.current);
+      } else {
+        setConnectionStatus('CONNECTING');
+        void supabaseAuth.ensureAnonymousSession(session).then(res => {
+          if (res.success && res.user) {
+            setIsConnected(true);
+            setConnectionStatus('CONNECTED');
+          } else {
+            setIsConnected(false);
+            setConnectionStatus('ERROR');
+            if (res.error) setError(res.error);
+          }
+        });
+      }
+      return;
+    }
+    socket?.connect();
+  }, [socket, session, refreshSupabaseRoomState]);
 
   const updateSettings = useCallback(
     (settingsPatch: any) => {
@@ -903,6 +1067,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         joinRoom,
         toggleReady,
         setTeam,
+        selectToken,
+        selectColor,
+        retryConnection,
         updateSettings,
         startGame,
         rollDice,

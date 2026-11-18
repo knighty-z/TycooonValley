@@ -346,6 +346,33 @@ export class SupabaseGameService {
     });
   }
 
+  /**
+   * Updates a lobby member's cosmetic profile fields (token, color, nickname, avatar).
+   * Permitted during LOBBY via existing RLS policy & column grants on public.room_members.
+   */
+  public async updateMemberProfile(
+    roomId: string,
+    userId: string,
+    patch: { token?: string; color?: string; nickname?: string; avatar?: string }
+  ): Promise<SupabaseActionResult> {
+    return this.runLocked('update_member_profile', async () => {
+      const client = this.getClient();
+      const payload: Record<string, any> = { updated_at: new Date().toISOString() };
+      if (patch.token !== undefined) payload.token = patch.token;
+      if (patch.color !== undefined) payload.color = patch.color;
+      if (patch.nickname !== undefined) payload.nickname = patch.nickname;
+      if (patch.avatar !== undefined) payload.avatar = patch.avatar;
+
+      const { error } = await client
+        .from('room_members')
+        .update(payload)
+        .eq('room_id', roomId)
+        .eq('user_id', userId);
+      if (error) return { success: false, error: error.message };
+      return { success: true };
+    });
+  }
+
   public async updateSettings(roomId: string, mergedSettings: GameSettings): Promise<SupabaseActionResult> {
     return this.runLocked('update_settings', async () => {
       const client = this.getClient();

@@ -1,151 +1,145 @@
 import React, { useState } from 'react';
 import { useGame } from '../context/GameContext.js';
 import { soundEngine } from '../services/audio.js';
-import { 
-  Volume2, 
-  VolumeX, 
-  Copy, 
-  Check, 
-  BookOpen, 
-  LogOut, 
-  MessageSquare,
-  Sparkles
+import { getThemeConfig, type ThemeConfig } from '../themes/index.js';
+import {
+  Volume2,
+  VolumeX,
+  BookOpen,
+  Wifi,
+  WifiOff,
+  RefreshCw,
+  Crown
 } from 'lucide-react';
 
-interface NavbarProps {
+export interface NavbarProps {
   onOpenRules: () => void;
+  themeConfig?: ThemeConfig;
+  compact?: boolean;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ onOpenRules }) => {
-  const { 
-    gameState, 
-    isConnected, 
-    leaveRoom, 
-    unreadChatCount, 
-    isChatDrawerOpen, 
-    setIsChatDrawerOpen,
-    resetUnreadChatCount 
-  } = useGame();
-  
-  const [copied, setCopied] = useState(false);
+export const Navbar: React.FC<NavbarProps> = ({ onOpenRules, themeConfig, compact = false }) => {
+  const { gameState, connectionStatus, isConnected } = useGame();
   const [isMuted, setIsMuted] = useState(soundEngine.getMuted());
 
-  const handleCopyCode = () => {
-    if (!gameState?.roomCode) return;
-    soundEngine.playClick();
-    const url = `${window.location.origin}?room=${gameState.roomCode}`;
-    navigator.clipboard.writeText(url);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
+  const theme =
+    themeConfig ??
+    (gameState ? getThemeConfig(gameState.settings.theme) : getThemeConfig('original'));
+  const isChamfered = theme.chamfered;
 
   const handleToggleMute = () => {
     const next = soundEngine.toggleMute();
     setIsMuted(next);
   };
 
-  const handleToggleChat = () => {
-    soundEngine.playClick();
-    setIsChatDrawerOpen(!isChatDrawerOpen);
-    if (!isChatDrawerOpen) {
-      resetUnreadChatCount();
-    }
-  };
+  const statusMeta =
+    connectionStatus === 'RECONNECTING'
+      ? { label: 'Reconnecting', dot: '#F59E0B', Icon: RefreshCw, spin: true }
+      : isConnected
+      ? { label: 'Live', dot: '#22C55E', Icon: Wifi, spin: false }
+      : { label: 'Offline', dot: '#EF4444', Icon: WifiOff, spin: false };
 
   return (
-    <header className="h-16 border-b border-[#3A2616] bg-[#0A1610]/95 backdrop-blur-md px-4 sm:px-8 flex items-center justify-between z-30 sticky top-0 shadow-lg">
-      {/* Brand & Crest */}
-      <div 
-        className="flex items-center space-x-3 cursor-pointer select-none" 
-        onClick={() => !gameState && window.location.reload()}
-      >
-        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-[#E2B755] via-[#B8860B] to-[#734A12] p-0.5 shadow-md flex items-center justify-center">
-          <div className="w-full h-full bg-[#12241A] rounded-[6px] flex items-center justify-center">
-            <span className="font-display text-lg text-[#E2B755]">T</span>
-          </div>
+    <header
+      style={{
+        backgroundColor: 'color-mix(in srgb, var(--bg) 90%, #000000)',
+        borderColor: 'color-mix(in srgb, var(--tile-border) 50%, transparent)',
+        color: 'var(--board-ink)',
+        fontFamily: 'var(--font-body)'
+      }}
+      className={`${
+        compact ? 'h-12' : 'h-14'
+      } border-b px-4 sm:px-6 flex items-center justify-between z-30 shrink-0 transition-colors`}
+    >
+      {/* Brand Crest */}
+      <div className="flex items-center gap-2.5 select-none">
+        <div
+          style={{
+            backgroundColor: 'color-mix(in srgb, var(--accent) 18%, var(--board))',
+            borderColor: 'var(--accent)',
+            borderRadius: isChamfered ? '0px' : theme.id === 'wompwomp' ? '10px' : '4px',
+            clipPath: isChamfered
+              ? 'polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px))'
+              : undefined
+          }}
+          className="w-8 h-8 border flex items-center justify-center shrink-0 overflow-hidden"
+        >
+          {theme.id === 'wompwomp' ? (
+            <img
+              src="/tokens/wompwomp/peach.png"
+              alt="WorldWompWomp"
+              draggable={false}
+              className="w-6 h-6 object-contain"
+            />
+          ) : (
+            <Crown className="w-4 h-4" style={{ color: 'var(--accent)' }} />
+          )}
         </div>
-        <div>
-          <span className="font-display font-black text-lg sm:text-xl tracking-widest text-[#F5EEDB]">
-            TYCOON<span className="text-[#D4AF37]">VALE</span>
+        <div className="flex items-baseline gap-2">
+          <span
+            style={{
+              fontFamily: 'var(--font-heading)',
+              textTransform: theme.fonts.headingUppercase ? 'uppercase' : 'none'
+            }}
+            className="text-base sm:text-lg font-black tracking-[0.14em]"
+          >
+            TYCOON<span style={{ color: 'var(--accent)' }}>VALE</span>
           </span>
-          <span className="hidden sm:inline-block ml-2 text-[9px] uppercase font-mono tracking-widest text-[#B58A30] border-l border-[#B58A30]/30 pl-2">
-            Tabletop Edition
+          <span className="hidden md:inline text-[10px] uppercase tracking-[0.2em] opacity-60">
+            {theme.name}
           </span>
         </div>
       </div>
 
-      {/* Center: Tabletop Wax-Seal Room Badge if in room */}
-      {gameState && (
-        <div className="flex items-center space-x-2 bg-[#12241A] border border-[#B58A30]/50 px-3.5 py-1.5 rounded-full shadow-inner">
-          <span className="text-xs text-[#C8B89E] font-serif uppercase tracking-wider">Room:</span>
-          <span className="font-mono font-black text-[#FCE794] tracking-widest text-sm">
-            {gameState.roomCode}
-          </span>
-          <button
-            onClick={handleCopyCode}
-            title="Copy invitation link"
-            className="p-1 rounded hover:bg-[#1E3A2A] text-[#C8B89E] hover:text-[#FFF] transition flex items-center"
-          >
-            {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-          </button>
-        </div>
-      )}
-
-      {/* Right Controls */}
-      <div className="flex items-center space-x-2 sm:space-x-3">
-        {/* Connection status indicator */}
-        <div className="flex items-center space-x-1.5 text-xs px-2.5 py-1 rounded-full bg-[#102016] border border-[#2D3E32]">
-          <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`} />
-          <span className="text-[#A3B899] text-[11px] hidden md:inline">
-            {isConnected ? 'Table Ready' : 'Connecting...'}
-          </span>
+      {/* Right Utility Controls */}
+      <div className="flex items-center gap-2">
+        <div
+          style={{
+            backgroundColor: 'color-mix(in srgb, var(--board) 75%, var(--bg))',
+            borderColor: 'color-mix(in srgb, var(--tile-border) 45%, transparent)',
+            borderRadius: isChamfered ? '0px' : '9999px'
+          }}
+          className="px-2.5 py-1 border flex items-center gap-1.5 text-[11px]"
+          title={`Connection: ${statusMeta.label}`}
+        >
+          <span
+            className={`w-1.5 h-1.5 rounded-full ${statusMeta.spin ? 'animate-ping' : ''}`}
+            style={{ backgroundColor: statusMeta.dot }}
+          />
+          <statusMeta.Icon
+            className={`w-3 h-3 opacity-80 ${statusMeta.spin ? 'animate-spin' : ''}`}
+          />
+          <span className="hidden sm:inline font-semibold opacity-85">{statusMeta.label}</span>
         </div>
 
-        {/* Chat Drawer Toggle (with unread badge) */}
-        {gameState && (
-          <button
-            onClick={handleToggleChat}
-            title="Multiplayer Chat & Ledger"
-            className="relative p-2 rounded-lg bg-[#14261C] border border-[#3A4E3F] text-[#DED7C8] hover:text-white hover:border-[#B58A30] transition"
-          >
-            <MessageSquare className="w-4 h-4 text-[#D4AF37]" />
-            {unreadChatCount > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 bg-red-600 text-white text-[10px] font-bold px-1.5 py-0.2 rounded-full animate-bounce">
-                {unreadChatCount}
-              </span>
-            )}
-          </button>
-        )}
-
-        {/* Audio Toggle */}
         <button
+          type="button"
           onClick={handleToggleMute}
+          aria-label={isMuted ? 'Unmute audio' : 'Mute audio'}
           title={isMuted ? 'Unmute Audio' : 'Mute Audio'}
-          className="p-2 rounded-lg bg-[#14261C] border border-[#3A4E3F] text-[#DED7C8] hover:text-white hover:border-[#B58A30] transition"
+          data-chamfered={isChamfered ? 'true' : 'false'}
+          className="tv-hud-btn tv-hud-btn-secondary p-2"
         >
-          {isMuted ? <VolumeX className="w-4 h-4 text-red-400" /> : <Volume2 className="w-4 h-4 text-[#E2B755]" />}
+          {isMuted ? (
+            <VolumeX className="w-3.5 h-3.5 text-rose-400" />
+          ) : (
+            <Volume2 className="w-3.5 h-3.5" style={{ color: 'var(--accent)' }} />
+          )}
         </button>
 
-        {/* Rules button */}
         <button
-          onClick={onOpenRules}
-          title="Rulebook"
-          className="p-2 rounded-lg bg-[#14261C] border border-[#3A4E3F] text-[#DED7C8] hover:text-white hover:border-[#B58A30] transition flex items-center space-x-1.5"
+          type="button"
+          onClick={() => {
+            soundEngine.play('ui_click', theme.id);
+            onOpenRules();
+          }}
+          data-testid="navbar-rules-btn"
+          data-chamfered={isChamfered ? 'true' : 'false'}
+          className="tv-hud-btn tv-hud-btn-secondary px-3 py-1.5 text-[11px]"
         >
-          <BookOpen className="w-4 h-4 text-[#D4AF37]" />
-          <span className="text-xs font-serif font-bold tracking-wider hidden lg:inline">Rulebook</span>
+          <BookOpen className="w-3.5 h-3.5" style={{ color: 'var(--accent)' }} />
+          <span className="hidden sm:inline">How to Play</span>
         </button>
-
-        {/* Leave Match */}
-        {gameState && (
-          <button
-            onClick={leaveRoom}
-            title="Leave table"
-            className="p-2 rounded-lg bg-[#3B0E14] border border-[#6B1D27] text-red-300 hover:bg-[#52141C] transition"
-          >
-            <LogOut className="w-4 h-4" />
-          </button>
-        )}
       </div>
     </header>
   );

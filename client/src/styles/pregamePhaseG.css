@@ -1,0 +1,309 @@
+/* ==========================================================================
+   PHASE G: ENHANCED PREGAME, WORLD SELECTION, LOBBY & CHARACTER SHOWCASE
+   Driven strictly by [data-theme="original" | "valorant" | "india" | "cyberpunk"]
+   CSS custom properties from ThemeConfig. Zero impact on board25d.css.
+   ========================================================================== */
+
+/* World-Specific Pregame Ambient Environments */
+.tv-pregame-shell {
+  position: relative;
+  background-color: var(--bg);
+  color: var(--board-ink);
+  font-family: var(--font-body);
+  transition: background-color 260ms ease, color 260ms ease;
+}
+
+.tv-pregame-shell[data-theme="original"] {
+  background-image:
+    radial-gradient(ellipse 72% 58% at 62% 24%, rgba(201, 162, 75, 0.11) 0%, transparent 64%),
+    radial-gradient(ellipse 56% 52% at 15% 88%, rgba(47, 125, 79, 0.16) 0%, transparent 65%),
+    linear-gradient(160deg, #0D251E 0%, #091B15 62%, #07140F 100%);
+}
+
+.tv-pregame-shell[data-theme="valorant"] {
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='48' viewBox='0 0 56 48'%3E%3Cpath d='M14 1L42 1L55 24L42 47L14 47L1 24Z' fill='none' stroke='%239AA8B5' stroke-opacity='0.055' stroke-width='1'/%3E%3C/svg%3E"),
+    radial-gradient(ellipse 64% 52% at 72% 22%, rgba(255, 70, 85, 0.085) 0%, transparent 62%),
+    linear-gradient(155deg, #131F2B 0%, #0E1721 56%, #0A1119 100%);
+  background-size: 56px 48px, 100% 100%, 100% 100%;
+}
+
+.tv-pregame-shell[data-theme="india"] {
+  background-image:
+    radial-gradient(ellipse 68% 54% at 65% 22%, rgba(242, 154, 46, 0.12) 0%, transparent 62%),
+    radial-gradient(ellipse 50% 48% at 18% 82%, rgba(31, 138, 91, 0.16) 0%, transparent 64%),
+    linear-gradient(160deg, #0E2D24 0%, #0A221B 60%, #071813 100%);
+}
+
+.tv-pregame-shell[data-theme="cyberpunk"] {
+  background-image:
+    repeating-linear-gradient(
+      0deg,
+      rgba(25, 240, 255, 0.025) 0px,
+      rgba(25, 240, 255, 0.025) 1px,
+      transparent 1px,
+      transparent 14px
+    ),
+    radial-gradient(ellipse 62% 50% at 70% 24%, rgba(25, 240, 255, 0.09) 0%, transparent 60%),
+    radial-gradient(ellipse 46% 44% at 16% 84%, rgba(255, 43, 214, 0.08) 0%, transparent 62%),
+    linear-gradient(155deg, #0A0B18 0%, #07070F 62%, #04040A 100%);
+}
+
+.tv-pregame-shell[data-theme="wompwomp"] {
+  background-image:
+    radial-gradient(ellipse 66% 52% at 72% 20%, rgba(255, 138, 184, 0.14) 0%, transparent 62%),
+    radial-gradient(ellipse 52% 48% at 14% 84%, rgba(196, 155, 255, 0.15) 0%, transparent 64%),
+    radial-gradient(ellipse 42% 38% at 48% 54%, rgba(255, 209, 102, 0.06) 0%, transparent 62%),
+    linear-gradient(155deg, #25173B 0%, #1B112B 58%, #130B20 100%);
+}
+
+/* Primary Elevated Panel Surface (Architectural, Restraint over Glassmorphism) */
+.tv-pregame-surface {
+  background-color: color-mix(in srgb, var(--board) 92%, var(--bg));
+  border: 1px solid color-mix(in srgb, var(--tile-border) 68%, transparent);
+  border-radius: var(--radius-tile);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 14px 34px rgba(0, 0, 0, 0.36);
+}
+
+.tv-pregame-surface[data-chamfered="true"] {
+  border-radius: 0;
+  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+}
+
+[data-theme="valorant"] .tv-pregame-surface {
+  background-image: linear-gradient(160deg, #1B2A38 0%, #14202C 60%, #101A24 100%);
+  border-color: #3E5264;
+}
+
+[data-theme="cyberpunk"] .tv-pregame-surface {
+  background-image: linear-gradient(160deg, #121327 0%, #0C0D1B 65%, #090914 100%);
+  border-color: color-mix(in srgb, #19F0FF 36%, #2A2A44);
+}
+
+[data-theme="wompwomp"] .tv-pregame-surface {
+  background-image: linear-gradient(160deg, #2F204A 0%, #24173A 62%, #1D1230 100%);
+  border-color: #624792;
+  border-radius: 12px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 247, 242, 0.12),
+    0 14px 32px rgba(11, 5, 22, 0.44);
+}
+
+/* Subtle World-Specific Corner Accents on VALORANT Showcase */
+.tv-val-brackets {
+  position: relative;
+}
+
+.tv-val-brackets::before,
+.tv-val-brackets::after {
+  content: '';
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.tv-val-brackets::before {
+  top: 8px;
+  left: 8px;
+  border-top: 2px solid #FF4655;
+  border-left: 2px solid #FF4655;
+}
+
+.tv-val-brackets::after {
+  bottom: 8px;
+  right: 8px;
+  border-bottom: 2px solid rgba(236, 232, 225, 0.45);
+  border-right: 2px solid rgba(236, 232, 225, 0.45);
+}
+
+/* ==========================================================================
+   COLLECTIBLE DISPLAY PEDESTALS (WORLD-AUTHENTIC)
+   ========================================================================== */
+
+.tv-showcase-stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  overflow: hidden;
+  border-radius: var(--radius-tile);
+  border: 1px solid color-mix(in srgb, var(--tile-border) 55%, transparent);
+}
+
+.tv-showcase-stage[data-world="valorant"] {
+  background:
+    radial-gradient(ellipse 68% 58% at 50% 34%, rgba(236, 232, 225, 0.08) 0%, transparent 66%),
+    radial-gradient(ellipse 56% 36% at 50% 82%, rgba(255, 70, 85, 0.14) 0%, transparent 70%),
+    linear-gradient(180deg, #121E2A 0%, #0D1620 65%, #091018 100%);
+  border-color: #3D5163;
+  border-radius: 0;
+  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+}
+
+.tv-showcase-stage[data-world="original"] {
+  background:
+    radial-gradient(ellipse 68% 56% at 50% 34%, rgba(244, 238, 220, 0.10) 0%, transparent 64%),
+    radial-gradient(ellipse 58% 36% at 50% 84%, rgba(201, 162, 75, 0.18) 0%, transparent 72%),
+    linear-gradient(180deg, #143A2E 0%, #0E2B22 65%, #091D17 100%);
+}
+
+.tv-showcase-stage[data-world="india"] {
+  background:
+    radial-gradient(ellipse 68% 56% at 50% 34%, rgba(251, 243, 226, 0.10) 0%, transparent 64%),
+    radial-gradient(ellipse 60% 36% at 50% 84%, rgba(242, 154, 46, 0.20) 0%, transparent 72%),
+    linear-gradient(180deg, #134234 0%, #0C2E24 65%, #071E17 100%);
+}
+
+.tv-showcase-stage[data-world="cyberpunk"] {
+  background:
+    repeating-linear-gradient(
+      0deg,
+      rgba(25, 240, 255, 0.03) 0px,
+      rgba(25, 240, 255, 0.03) 1px,
+      transparent 1px,
+      transparent 10px
+    ),
+    radial-gradient(ellipse 60% 42% at 50% 82%, rgba(25, 240, 255, 0.18) 0%, transparent 70%),
+    linear-gradient(180deg, #111226 0%, #0B0B19 65%, #070712 100%);
+  border-color: color-mix(in srgb, #19F0FF 45%, #2A2A44);
+  border-radius: 0;
+  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+}
+
+.tv-showcase-stage[data-world="wompwomp"] {
+  background:
+    radial-gradient(ellipse 68% 54% at 50% 34%, rgba(255, 247, 242, 0.12) 0%, transparent 64%),
+    radial-gradient(ellipse 64% 40% at 50% 82%, rgba(255, 138, 184, 0.24) 0%, transparent 72%),
+    linear-gradient(180deg, #352354 0%, #26183E 62%, #1C1130 100%);
+  border-color: #7455AA;
+  border-radius: 12px;
+}
+
+/* Tactile Physical Pedestal Plinth */
+.tv-pedestal-base {
+  position: relative;
+  width: 78%;
+  max-width: 210px;
+  height: 22px;
+  border-radius: 9999px;
+  margin-top: -10px;
+  border: 1.5px solid color-mix(in srgb, var(--accent) 55%, var(--tile-border));
+  background: radial-gradient(
+    ellipse at 50% 35%,
+    color-mix(in srgb, var(--board) 75%, #ffffff 12%) 0%,
+    color-mix(in srgb, var(--bg) 90%, #000000) 78%
+  );
+  box-shadow:
+    inset 0 2px 6px rgba(255, 255, 255, 0.14),
+    0 10px 22px rgba(0, 0, 0, 0.55);
+}
+
+.tv-showcase-stage[data-world="valorant"] .tv-pedestal-base {
+  border-radius: 2px;
+  clip-path: polygon(10% 0, 90% 0, 100% 100%, 0 100%);
+  border: 1px solid #53687C;
+  border-bottom: 2px solid #FF4655;
+  background: linear-gradient(180deg, #273746 0%, #15202B 100%);
+}
+
+.tv-showcase-stage[data-world="cyberpunk"] .tv-pedestal-base {
+  border-radius: 2px;
+  clip-path: polygon(12% 0, 88% 0, 100% 100%, 0 100%);
+  border: 1px solid #19F0FF;
+  background: linear-gradient(180deg, #1A1E3B 0%, #0B0D1D 100%);
+  box-shadow: 0 0 18px rgba(25, 240, 255, 0.22), 0 10px 20px rgba(0, 0, 0, 0.65);
+}
+
+.tv-showcase-stage[data-world="wompwomp"] .tv-pedestal-base {
+  border-radius: 9999px;
+  height: 24px;
+  border: 2px solid #FF8AB8;
+  background: radial-gradient(ellipse at 50% 35%, #5C3E8F 0%, #2C1B47 78%);
+  box-shadow:
+    inset 0 2px 6px rgba(255, 240, 248, 0.32),
+    0 6px 20px rgba(255, 138, 184, 0.28),
+    0 10px 20px rgba(10, 4, 22, 0.55);
+}
+
+.tv-figurine-shadow {
+  width: 62%;
+  max-width: 150px;
+  height: 16px;
+  margin-top: -12px;
+  margin-bottom: -4px;
+  border-radius: 9999px;
+  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.72) 0%, rgba(0, 0, 0, 0) 74%);
+  pointer-events: none;
+}
+
+/* ==========================================================================
+   HERO 2.5D MINI-BOARD BACKDROP (PAUSABLE + REDUCED-MOTION SAFE)
+   ========================================================================== */
+
+.tv-hero-board-perspective {
+  perspective: 1200px;
+  perspective-origin: 50% 42%;
+}
+
+.tv-hero-board-slab {
+  transform: rotateX(56deg) rotateZ(-28deg);
+  transform-style: preserve-3d;
+  box-shadow:
+    0 20px 0 var(--board-slab),
+    0 44px 80px rgba(0, 0, 0, 0.62);
+  transition: background-color 300ms ease, border-color 300ms ease;
+}
+
+@keyframes tv-world-sweep {
+  0%   { transform: translateX(-120%); opacity: 0; }
+  15%  { opacity: 0.45; }
+  85%  { opacity: 0.45; }
+  100% { transform: translateX(120%); opacity: 0; }
+}
+
+.tv-world-card-sweep::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 25%, rgba(255, 255, 255, 0.16) 50%, transparent 75%);
+  transform: translateX(-120%);
+  pointer-events: none;
+}
+
+.tv-world-card-sweep:hover::after {
+  animation: tv-world-sweep 950ms ease-out forwards;
+}
+
+/* Token selection card hover & selected ring */
+.tv-roster-card {
+  position: relative;
+  transition: transform 140ms ease, border-color 140ms ease, background-color 140ms ease, box-shadow 140ms ease;
+}
+
+.tv-roster-card:hover:not(:disabled) {
+  transform: translateY(-2px);
+}
+
+.tv-roster-card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.tv-roster-card[data-chamfered="true"] {
+  border-radius: 0;
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tv-hero-board-slab,
+  .tv-world-card-sweep::after,
+  .tv-roster-card {
+    animation: none !important;
+    transition: none !important;
+  }
+}

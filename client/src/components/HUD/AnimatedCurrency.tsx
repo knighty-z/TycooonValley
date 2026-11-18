@@ -86,11 +86,11 @@ export const AnimatedCurrency: React.FC<AnimatedCurrencyProps> = React.memo(
             <motion.span
               key={delta.id}
               data-testid="currency-delta"
-              initial={{ opacity: 0, y: 4, scale: 0.85 }}
-              animate={{ opacity: 1, y: -14, scale: 1 }}
-              exit={{ opacity: 0, y: -22, scale: 0.9 }}
+              initial={{ opacity: 0, y: 2, scale: 0.88 }}
+              animate={{ opacity: 1, y: -12, scale: 1 }}
+              exit={{ opacity: 0, y: -20, scale: 0.92 }}
               transition={{ duration: 0.45, ease: 'easeOut' }}
-              className={`pointer-events-none absolute -top-2 left-full ml-1 whitespace-nowrap text-[10px] font-mono font-black drop-shadow ${
+              className={`pointer-events-none absolute -top-1 right-0 whitespace-nowrap text-[10px] font-mono font-black drop-shadow z-20 ${
                 delta.amount > 0 ? 'text-emerald-300' : 'text-rose-400'
               }`}
             >

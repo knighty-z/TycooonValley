@@ -1,0 +1,191 @@
+/* ==========================================================================
+   PHASE E: WORLD-THEMED IN-GAME HUD, CHAT, MODALS, TOASTS & SETTINGS
+   Driven strictly by CSS custom properties from ThemeConfig ([data-theme="..."]).
+   Zero changes to board layout, tile design, tokens, dice, or board25d.css.
+   ========================================================================== */
+
+/* Shared HUD Panel Surface */
+.tv-hud-panel {
+  background-color: var(--board);
+  border: 1px solid var(--tile-border);
+  border-radius: var(--radius-tile);
+  color: var(--board-ink);
+  font-family: var(--font-body);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.34);
+}
+
+.tv-hud-panel[data-chamfered="true"] {
+  border-radius: 0;
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
+}
+
+/* Sub-surface card inside HUD panels */
+.tv-hud-subcard {
+  background-color: color-mix(in srgb, var(--bg) 82%, var(--board));
+  border: 1px solid color-mix(in srgb, var(--tile-border) 48%, transparent);
+  border-radius: var(--radius-tile);
+}
+
+/* Keyboard focus accessibility across all 4 worlds */
+.tv-hud-focus:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Primary & Secondary World-Themed Action Buttons */
+.tv-hud-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  border-radius: var(--radius-button);
+  transition: transform 110ms ease, filter 130ms ease, background-color 130ms ease, border-color 130ms ease, opacity 130ms ease;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tv-hud-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.tv-hud-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.tv-hud-btn:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.tv-hud-btn[data-chamfered="true"] {
+  border-radius: 0;
+  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+}
+
+.tv-hud-btn-primary {
+  background-color: var(--accent);
+  color: #0B1218;
+  border: 1px solid color-mix(in srgb, var(--accent) 82%, #ffffff);
+  box-shadow: 0 3px 10px color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+.tv-hud-btn-primary:hover:not(:disabled) {
+  filter: brightness(1.09);
+}
+
+/* VALORANT tactical metallic primary CTA override */
+[data-theme="valorant"] .tv-hud-btn-primary {
+  background: linear-gradient(180deg, #2B3B4B 0%, #1B2835 60%, #15202B 100%);
+  color: #ECE8E1;
+  border: 1px solid #596E82;
+  border-left: 3px solid #FF4655;
+  box-shadow: inset 0 1px 0 rgba(236, 232, 225, 0.2), 0 4px 12px rgba(0, 0, 0, 0.42);
+}
+
+[data-theme="valorant"] .tv-hud-btn-primary:hover:not(:disabled) {
+  filter: brightness(1.16);
+}
+
+/* WorldWompWomp playful pastel primary CTA override */
+[data-theme="wompwomp"] .tv-hud-btn-primary {
+  background: linear-gradient(180deg, #FFA3C8 0%, #FF78AE 100%);
+  color: #241133;
+  border: 1.5px solid #FFD1E4;
+  border-radius: 9999px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 3px 12px rgba(255, 120, 174, 0.34);
+}
+
+[data-theme="wompwomp"] .tv-hud-btn-secondary {
+  border-radius: 10px;
+}
+
+[data-theme="wompwomp"] .tv-hud-panel {
+  background-image: linear-gradient(165deg, #2B1D44 0%, #211536 72%, #1B102D 100%);
+  border-color: #5C4487;
+  box-shadow: inset 0 1px 0 rgba(255, 247, 242, 0.1), 0 12px 28px rgba(10, 4, 22, 0.42);
+}
+
+.tv-hud-btn-secondary {
+  background-color: color-mix(in srgb, var(--bg) 78%, var(--board));
+  color: var(--board-ink);
+  border: 1px solid color-mix(in srgb, var(--tile-border) 72%, transparent);
+}
+
+.tv-hud-btn-secondary:hover:not(:disabled) {
+  border-color: var(--accent);
+  background-color: color-mix(in srgb, var(--accent) 14%, var(--bg));
+}
+
+.tv-hud-btn-danger {
+  background-color: color-mix(in srgb, #DC2626 20%, var(--bg));
+  color: #FCA5A5;
+  border: 1px solid rgba(239, 68, 68, 0.55);
+}
+
+.tv-hud-btn-danger:hover:not(:disabled) {
+  background-color: color-mix(in srgb, #DC2626 32%, var(--bg));
+  border-color: #EF4444;
+}
+
+/* Slim, world-tinted internal scrollbars (no jarring default white scrollbars) */
+.tv-hud-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--tile-border) 65%, transparent) transparent;
+}
+
+.tv-hud-scroll::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.tv-hud-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.tv-hud-scroll::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--tile-border) 60%, transparent);
+  border-radius: 999px;
+}
+
+.tv-hud-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: var(--accent);
+}
+
+/* Range slider themed to world accent */
+.tv-hud-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tile-border) 42%, var(--bg));
+  outline: none;
+}
+
+.tv-hud-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--accent);
+  border: 2px solid var(--bg);
+  cursor: pointer;
+}
+
+.tv-hud-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--accent);
+  border: 2px solid var(--bg);
+  cursor: pointer;
+}
+
+/* Player turn timer ring transition */
+.tv-turn-ring-circle {
+  transition: stroke-dashoffset 450ms linear, stroke 250ms ease;
+}
