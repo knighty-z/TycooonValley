@@ -1,0 +1,130 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800;900&family=Cinzel+Decorative:wght@700;900&family=Playfair+Display:ital,wght@0,600;0,700;0,900;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-[#08120D] text-[#EFE9DB] font-sans antialiased selection:bg-[#B48425] selection:text-[#FFFFFF];
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+}
+
+/* Custom Tabletop Typography */
+.font-serif-display {
+  font-family: 'Cinzel Decorative', 'Cinzel', serif;
+}
+.font-serif-classic {
+  font-family: 'Playfair Display', Georgia, serif;
+}
+.font-sans-game {
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+}
+.font-mono-num {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Authentic Tabletop Textures & Filigree */
+.bg-tabletop-wood {
+  background-color: #170E08;
+  background-image: 
+    radial-gradient(ellipse at 50% 0%, rgba(212, 175, 55, 0.08) 0%, transparent 60%),
+    repeating-linear-gradient(45deg, rgba(0,0,0,0.15) 0px, rgba(0,0,0,0.15) 2px, transparent 2px, transparent 8px);
+}
+
+.bg-tabletop-felt {
+  background-color: #0E291C;
+  background-image: radial-gradient(circle at 50% 50%, rgba(30, 86, 58, 0.4) 0%, rgba(10, 30, 20, 0.95) 100%);
+}
+
+.bg-parchment {
+  background-color: #F8F4EA;
+  background-image: radial-gradient(circle at 50% 50%, rgba(255,255,255,0.6) 0%, rgba(240, 230, 210, 0.9) 100%);
+}
+
+/* Brass & Gold Trim */
+.border-brass {
+  border-color: #B58A30;
+}
+
+.shadow-brass-glow {
+  box-shadow: 0 0 15px rgba(212, 175, 55, 0.25), inset 0 0 8px rgba(212, 175, 55, 0.15);
+}
+
+.text-gold-foil {
+  background: linear-gradient(135deg, #FFF1B0 0%, #D4AF37 50%, #AA7C11 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Tabletop Divider Line */
+.filigree-divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+}
+.filigree-divider::before,
+.filigree-divider::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid rgba(212, 175, 55, 0.3);
+}
+.filigree-divider:not(:empty)::before {
+  margin-right: 1rem;
+}
+.filigree-divider:not(:empty)::after {
+  margin-left: 1rem;
+}
+
+/* 11x11 Square Board Grid */
+.board-grid-11 {
+  display: grid;
+  grid-template-columns: 13.5% repeat(9, 8.11%) 13.5%;
+  grid-template-rows: 13.5% repeat(9, 8.11%) 13.5%;
+  aspect-ratio: 1 / 1;
+}
+
+/* Custom Tabletop Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0D1611;
+}
+::-webkit-scrollbar-thumb {
+  background: #3B2E1C;
+  border: 1px solid #735728;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #8A6A32;
+}
+
+/* Token Movement and Hover Animations */
+@keyframes token-bob {
+  0%, 100% { transform: translateY(0px) scale(1); }
+  50% { transform: translateY(-5px) scale(1.08); }
+}
+.animate-token-bob {
+  animation: token-bob 1.4s ease-in-out infinite;
+}
+
+@keyframes dice-tumble {
+  0% { transform: rotate(0deg) scale(0.9); }
+  25% { transform: rotate(18deg) scale(1.1); }
+  50% { transform: rotate(-15deg) scale(0.95); }
+  75% { transform: rotate(8deg) scale(1.05); }
+  100% { transform: rotate(0deg) scale(1); }
+}
+.animate-dice-tumble {
+  animation: dice-tumble 0.35s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-token-bob,
+  .animate-dice-tumble {
+    animation: none !important;
+  }
+}
